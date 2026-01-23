@@ -156,7 +156,15 @@ class ModelPair:
                 dml_device = get_directml_device()
                 if dml_device is not None:
                     logger.info(f"Moving model to DirectML device: {dml_device}")
-                    model = model.to(dml_device)
+                    try:
+                        model = model.to(dml_device)
+                    except RuntimeError as e:
+                        if "allocate" in str(e).lower() or "memory" in str(e).lower():
+                            logger.warning(f"OOM on DirectML device ({e}). Falling back to CPU.")
+                            model = model.to("cpu")
+                            # Update tracking if possible, or just let it run on CPU
+                        else:
+                            raise e
                 else:
                     logger.warning("DirectML device not available, using CPU")
                     model = model.to("cpu")

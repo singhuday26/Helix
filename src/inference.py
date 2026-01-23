@@ -71,7 +71,7 @@ class HelixEngine:
     
     def __init__(
         self,
-        model_id: str = "gpt2",  # Draft on GPU
+        model_id: str = "TinyLlama/TinyLlama-1.1B-Chat-v1.0",  # Use same model as draft for stability
         target_model_id: Optional[str] = "TinyLlama/TinyLlama-1.1B-Chat-v1.0",  # Smart Target on CPU
         device: Optional[str] = None,
         quantize: bool = False,
