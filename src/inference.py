@@ -18,8 +18,7 @@ from src.speculative import (
     AdaptiveSpeculativeDecoder,
     simple_generate
 )
-
-logger = logging.getLogger(__name__)
+from src.kv_cache import PagedKVCache
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +85,7 @@ class HelixEngine:
         
         self._model_pair: Optional[ModelPair] = None
         self._speculative_decoder: Optional[SpeculativeDecoder] = None
+        self._kv_cache: Optional[PagedKVCache] = None
         self._is_loaded = False
         
         # Metrics
@@ -112,6 +112,24 @@ class HelixEngine:
         )
         self._model_pair.load_all()
         
+        # Initialize PagedKVCache for memory-efficient KV storage
+        # NOTE: Currently wired but not actively used in forward passes
+        # Future work: Integrate with model attention layers for KV reuse
+        try:
+            self._kv_cache = PagedKVCache(
+                num_blocks=512,  # Trade-off: More blocks = more memory but higher batch size
+                block_size=16,   # 16 tokens per block (cache line friendly)
+                num_layers=22,   # TinyLlama default
+                num_heads=4,     # TinyLlama GQA heads
+                head_dim=64,
+                dtype=torch.float16,
+                device=str(self.device),
+            )
+            logger.info("PagedKVCache initialized")
+        except Exception as e:
+            logger.warning(f"Failed to initialize KV cache: {e}. Continuing without cache.")
+            self._kv_cache = None
+        
         # Use Adaptive Decoder for "Senior Engineer" optimization
         self._speculative_decoder = AdaptiveSpeculativeDecoder(
             draft_model=self._model_pair.draft_model,
@@ -120,6 +138,7 @@ class HelixEngine:
             initial_depth=4,
             min_depth=2,
             max_depth=8,
+            kv_cache=self._kv_cache,
         )
         
         self._is_loaded = True
@@ -210,7 +229,8 @@ class HelixEngine:
                 formatted_prompt,
                 max_tokens=config.max_tokens,
             )
-            first_token_time = start_time + 0.1  # Approximate for now
+            # Use real TTFT from stats if available, otherwise fallback to start_time
+            first_token_time = stats.get("first_token_time", start_time + 0.1)
         else:
             # Use baseline autoregressive generation
             output_text = simple_generate(

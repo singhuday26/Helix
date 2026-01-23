@@ -195,15 +195,6 @@ class ModelPair:
         _ = self.tokenizer
         _ = self.draft_model
         _ = self.target_model
-        if self._tokenizer:
-            self._tokenizer = None # Release memory if needed (though usually small)
-        self._draft_model = None
-        self._target_model = None
-        
-        # Reload
-        _ = self.tokenizer
-        _ = self.draft_model
-        _ = self.target_model
         logger.info("All models loaded and ready")
         
     def unload_all(self) -> None:

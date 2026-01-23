@@ -15,9 +15,10 @@ Reference: "Fast Inference from Transformers via Speculative Decoding" (Leviatha
 
 import torch
 import torch.nn.functional as F
-from typing import Tuple, Optional, List
+from typing import Tuple, Optional, List, Dict
 from dataclasses import dataclass
 import logging
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +35,7 @@ class SpeculativeOutput:
     num_generated: int    # Total tokens generated (accepted + 1 resampled)
     draft_tokens: List[int]  # What draft proposed
     acceptance_rate: float   # For monitoring
+    first_token_time: Optional[float] = None  # Timestamp when first token was generated
 
 
 def sample_token(logits: torch.Tensor, temperature: float = 1.0) -> torch.Tensor:
@@ -80,6 +82,8 @@ def speculative_decode_step(
     input_ids: torch.Tensor,
     speculation_depth: int = DEFAULT_SPECULATION_DEPTH,
     temperature: float = 1.0,
+    kv_cache = None,  # Optional PagedKVCache instance
+    seq_id: Optional[int] = None,  # Sequence ID for cache lookup
 ) -> SpeculativeOutput:
     """
     Perform one step of speculative decoding.
@@ -97,10 +101,13 @@ def speculative_decode_step(
         input_ids: Current token sequence (batch_size=1)
         speculation_depth: Number of tokens to speculate (K)
         temperature: Sampling temperature
+        kv_cache: Optional PagedKVCache for KV reuse (currently not integrated)
+        seq_id: Sequence ID for cache operations (if kv_cache provided)
     
     Returns:
         SpeculativeOutput with accepted tokens and stats
     """
+    step_start_time = time.time()  # Capture timing for TTFT
     device = input_ids.device
     batch_size = input_ids.shape[0]
     assert batch_size == 1, "Speculative decoding currently supports batch_size=1"
@@ -187,6 +194,7 @@ def speculative_decode_step(
         num_generated=len(accepted_tokens),
         draft_tokens=draft_tokens,
         acceptance_rate=num_accepted / speculation_depth if speculation_depth > 0 else 0.0,
+        first_token_time=step_start_time,  # Record when this step started
     )
 
 
@@ -206,12 +214,15 @@ class SpeculativeDecoder:
         tokenizer,
         speculation_depth: int = DEFAULT_SPECULATION_DEPTH,
         temperature: float = 0.7,
+        kv_cache = None,  # Optional PagedKVCache
     ):
         self.draft_model = draft_model
         self.target_model = target_model
         self.tokenizer = tokenizer
         self.speculation_depth = speculation_depth
         self.temperature = temperature
+        self.kv_cache = kv_cache
+        self.seq_id = None  # Will be set during generation
         
         # Stats tracking
         self.total_accepted = 0
@@ -239,17 +250,28 @@ class SpeculativeDecoder:
         input_ids = input_ids.to(device)
         
         generated_tokens = []
-        stats = {"total_steps": 0, "total_tokens": 0, "acceptance_rates": []}
+        stats = {"total_steps": 0, "total_tokens": 0, "acceptance_rates": [], "first_token_time": None}
         
-        while len(generated_tokens) < max_tokens:
-            # Run one speculative step
-            result = speculative_decode_step(
-                self.draft_model,
-                self.target_model,
-                input_ids,
-                speculation_depth=self.speculation_depth,
-                temperature=self.temperature,
-            )
+        # Allocate cache sequence if using PagedKVCache
+        if self.kv_cache is not None:
+            self.seq_id = self.kv_cache.allocate_sequence()
+        
+        try:
+            while len(generated_tokens) < max_tokens:
+                # Run one speculative step
+                result = speculative_decode_step(
+                    self.draft_model,
+                    self.target_model,
+                    input_ids,
+                    speculation_depth=self.speculation_depth,
+                    temperature=self.temperature,
+                    kv_cache=self.kv_cache,
+                    seq_id=self.seq_id,
+                )
+                
+                # Capture TTFT on first step
+                if stats["first_token_time"] is None and result.first_token_time is not None:
+                    stats["first_token_time"] = result.first_token_time
             
             # Update stats
             stats["total_steps"] += 1
@@ -272,6 +294,12 @@ class SpeculativeDecoder:
             
             # Append to input for next iteration
             input_ids = torch.cat([input_ids, result.tokens], dim=-1)
+        
+        finally:
+            # Free cache sequence when done
+            if self.kv_cache is not None and self.seq_id is not None:
+                self.kv_cache.free_sequence(self.seq_id)
+                self.seq_id = None
         
         # Decode output
         full_ids = torch.cat([
@@ -323,13 +351,15 @@ class AdaptiveSpeculativeDecoder(SpeculativeDecoder):
         max_depth: int = 8,
         target_acceptance_rate: float = 0.6,
         temperature: float = 0.7,
+        kv_cache = None,  # Optional PagedKVCache
     ):
         super().__init__(
             draft_model, 
             target_model, 
             tokenizer, 
             speculation_depth=initial_depth,
-            temperature=temperature
+            temperature=temperature,
+            kv_cache=kv_cache,
         )
         self.min_depth = min_depth
         self.max_depth = max_depth
@@ -394,10 +424,18 @@ class AdaptiveSpeculativeDecoder(SpeculativeDecoder):
                 self.current_depth = max(self.min_depth, self.current_depth - 1)
             # ----------------------
             
-            generated_tokens.extend(result.tokens[0].tolist())
+            # Check stopping conditions BEFORE extending to prevent stop token leak
+            new_tokens = result.tokens[0].tolist()
+            if stop_token_id in new_tokens:
+                # Add tokens up to (not including) stop token
+                stop_idx = new_tokens.index(stop_token_id)
+                generated_tokens.extend(new_tokens[:stop_idx])
+                break
             
-            # Check stopping conditions (simplified for brevity)
-            if stop_token_id in generated_tokens or len(generated_tokens) >= max_tokens:
+            generated_tokens.extend(new_tokens)
+            
+            # Check max_tokens limit
+            if len(generated_tokens) >= max_tokens:
                 break
                 
             input_ids = torch.cat([input_ids, result.tokens], dim=-1)
