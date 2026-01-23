@@ -35,7 +35,7 @@ deactivate () {
 # unset irrelevant variables
 deactivate nondestructive
 
-VIRTUAL_ENV="C:\0001_Project\Helix\ven"
+VIRTUAL_ENV="C:\0001_Project\VSCode\Helix\ven"
 export VIRTUAL_ENV
 
 _OLD_VIRTUAL_PATH="$PATH"

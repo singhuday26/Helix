@@ -55,8 +55,8 @@ class ModelPair:
     
     def __init__(
         self,
-        draft_model_id: str = "gpt2",  # 124M params - good draft
-        target_model_id: Optional[str] = "TinyLlama/TinyLlama-1.1B-Chat-v1.0",  # Smarter target
+        draft_model_id: str = "TinyLlama/TinyLlama-1.1B-Chat-v1.0",  # Use same model family
+        target_model_id: Optional[str] = None,  # None = use draft as target (demo mode)
         draft_device: Optional[DeviceType] = None,
         target_device: Optional[DeviceType] = None,
         device: Optional[DeviceType] = None, # Legacy: sets both if above are None
@@ -175,8 +175,10 @@ class ModelPair:
             # Post-load verification
             logger.info(f"Verifying {model_type} model on {device}...")
             try:
-                # Create dummy input
-                dummy_input = torch.tensor([[50256]], device=device) # GPT-2 start token
+                # Create dummy input using model's vocabulary
+                # Use a safe token ID that exists in all models (typically 0-100 range)
+                # For TinyLlama and GPT-2, token ID 1 is safe
+                dummy_input = torch.tensor([[1]], device=device)
                 with torch.no_grad():
                     _ = model(dummy_input)
                 logger.info(f"{model_type.capitalize()} model verified successfully")

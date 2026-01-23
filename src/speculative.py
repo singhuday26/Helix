@@ -288,28 +288,28 @@ class SpeculativeDecoder:
                 # Capture TTFT on first step
                 if stats["first_token_time"] is None and result.first_token_time is not None:
                     stats["first_token_time"] = result.first_token_time
-            
-            # Update stats
-            stats["total_steps"] += 1
-            stats["acceptance_rates"].append(result.acceptance_rate)
-            self.total_accepted += result.num_accepted
-            self.total_speculated += self.speculation_depth
-            
-            # Add generated tokens
-            new_tokens = result.tokens[0].tolist()
-            for token in new_tokens:
-                if token == stop_token_id:
+                
+                # Update stats
+                stats["total_steps"] += 1
+                stats["acceptance_rates"].append(result.acceptance_rate)
+                self.total_accepted += result.num_accepted
+                self.total_speculated += self.speculation_depth
+                
+                # Add generated tokens
+                new_tokens = result.tokens[0].tolist()
+                for token in new_tokens:
+                    if token == stop_token_id:
+                        break
+                    generated_tokens.append(token)
+                    if len(generated_tokens) >= max_tokens:
+                        break
+                
+                # Check for stop token
+                if stop_token_id in new_tokens:
                     break
-                generated_tokens.append(token)
-                if len(generated_tokens) >= max_tokens:
-                    break
-            
-            # Check for stop token
-            if stop_token_id in new_tokens:
-                break
-            
-            # Append to input for next iteration
-            input_ids = torch.cat([input_ids, result.tokens], dim=-1)
+                
+                # Append to input for next iteration
+                input_ids = torch.cat([input_ids, result.tokens], dim=-1)
         
         finally:
             # Free cache sequence when done
