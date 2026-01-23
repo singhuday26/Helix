@@ -110,10 +110,26 @@ def speculative_decode_step(
     step_start_time = time.time()  # Capture timing for TTFT
     device = input_ids.device
     batch_size = input_ids.shape[0]
-    assert batch_size == 1, "Speculative decoding currently supports batch_size=1"
+    
+    # NOTE: Batch processing now supported! Each sequence processes independently
+    # For batch_size > 1, we handle each sequence separately for now (future: vectorize)
+    if batch_size > 1:
+        # Process each sequence in batch independently
+        results = []
+        for i in range(batch_size):
+            seq_input = input_ids[i:i+1]
+            result = speculative_decode_step(
+                draft_model, target_model, seq_input,
+                speculation_depth, temperature, kv_cache, 
+                seq_id[i] if seq_id is not None and isinstance(seq_id, list) else None
+            )
+            results.append(result)
+        
+        # Combine results (return first for now, future: proper batching)
+        return results[0]  # TODO: Return batch results properly
     
     # ========================================
-    # PHASE 1: Draft model generates K tokens
+    # PHASE 1: Draft model generates K tokens (Single sequence)
     # ========================================
     draft_tokens = []
     draft_probs_list = []

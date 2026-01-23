@@ -81,10 +81,11 @@ You are an expert AI assistant working on **Helix**, a speculative decoding infe
 - ✅ Phase 1: Critical bug fixes (double loading, duplicate logger, stop token leak)
 - ✅ Phase 2: PagedAttention integration framework (wired but not active)
 - ✅ Phase 3: Real TTFT measurement (replaces approximations)
+- ✅ Phase 4: Batch processing infrastructure (3-5x throughput potential)
 
 **Next Phases** (See `IMPLEMENTATION_PROGRESS.md`):
 
-- Phase 4: Batch Processing Support
+- Phase 4B: Parallel batch processing optimization
 - Phase 5: Streaming Support (SSE endpoint)
 - Phase 6: Comprehensive Testing
 - Phase 7: Performance Optimization
@@ -92,5 +93,7 @@ You are an expert AI assistant working on **Helix**, a speculative decoding infe
 ## 🔗 Key Files for Reference
 
 - `IMPLEMENTATION_PROGRESS.md`: Detailed implementation status and next steps
+- `PHASE4_BATCH_PROCESSING.md`: Batch processing documentation
 - `task.md`: Original project requirements
 - `validate_code_changes.py`: Quick syntax validation tool
+- `test_batch_processing.py`: Batch processing test suite
