@@ -442,6 +442,10 @@ class HelixEngine:
         generated_tokens = []
         stop_token_id = self._model_pair.tokenizer.eos_token_id
         
+        # Track previously decoded text for incremental decoding
+        # This ensures proper spacing by decoding context-aware
+        previous_decoded_text = ""
+        
         # Configure speculative decoder and get correct device
         if config.use_speculative:
             self._speculative_decoder.speculation_depth = config.speculation_depth
@@ -516,15 +520,32 @@ class HelixEngine:
                         )
                         return
                     
-                    # Decode token
+                    # Decode token - use incremental decoding for proper spacing
                     try:
-                        token_text = self._model_pair.tokenizer.decode([token_id], skip_special_tokens=True)
+                        # Decode all generated tokens so far to get proper spacing
+                        full_decoded = self._model_pair.tokenizer.decode(
+                            generated_tokens + [token_id], 
+                            skip_special_tokens=True,
+                            clean_up_tokenization_spaces=False
+                        )
+                        # Extract only the new text (difference from previous)
+                        token_text = full_decoded[len(previous_decoded_text):]
                     except Exception as e:
                         logger.warning(f"Token decode error: {e}")
                         token_text = "[?]"
                     
                     # Track generated token
                     generated_tokens.append(token_id)
+                    
+                    # Update previous decoded text for next iteration
+                    try:
+                        previous_decoded_text = self._model_pair.tokenizer.decode(
+                            generated_tokens, 
+                            skip_special_tokens=True,
+                            clean_up_tokenization_spaces=False
+                        )
+                    except:
+                        pass
                     
                     # Yield streaming token
                     yield StreamingToken(
