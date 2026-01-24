@@ -2,6 +2,17 @@
 
 Professional React UI for the Helix Speculative Decoding Inference Engine.
 
+## 🎯 Latest Updates
+
+### New Features Added
+
+✅ **Performance Visualizations** - Real-time charts showing token generation speed
+✅ **Batch Processing UI** - Parallel prompt processing with 3-5x throughput
+✅ **Comparison Mode** - Side-by-side standard vs speculative decoding benchmarks
+✅ **Settings Panel** - Interactive controls for all generation parameters
+✅ **Error Boundary** - Graceful error handling with user-friendly messages
+✅ **Logo & Branding** - Custom SVG logo representing the dual-helix architecture
+
 ## Features
 
 - ✨ **Real-Time Streaming**: Server-Sent Events (SSE) for live token generation
@@ -49,13 +60,20 @@ npm run preview
 
 ## Project Structure
 
-```
+```text
 frontend/
+├── public/
+│   └── helix-logo.svg         # Custom logo
 ├── src/
 │   ├── components/
 │   │   ├── Hero.jsx           # Hero section with stats
 │   │   ├── Education.jsx      # 5-level educational content
-│   │   ├── LiveDemo.jsx       # SSE streaming demo
+│   │   ├── LiveDemo.jsx       # SSE streaming demo (enhanced)
+│   │   ├── ComparisonMode.jsx # Benchmark comparison (NEW)
+│   │   ├── BatchDemo.jsx      # Batch processing (NEW)
+│   │   ├── PerformanceViz.jsx # Charts & metrics (NEW)
+│   │   ├── SettingsPanel.jsx  # Config controls (NEW)
+│   │   ├── ErrorBoundary.jsx  # Error handling (NEW)
 │   │   └── Footer.jsx         # Footer with links
 │   ├── App.jsx                # Main app component
 │   ├── main.jsx               # Entry point

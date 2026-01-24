@@ -48,6 +48,10 @@ app.add_middleware(
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     logger.error(f"Global error: {exc}")
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal Server Error", "error": str(exc)},
+    )
 
 
 # Lightweight ping endpoint (no model check, for fast validation)
@@ -59,10 +63,6 @@ async def ping():
     model status, use /health endpoint.
     """
     return {"status": "alive", "service": "helix"}
-    return JSONResponse(
-        status_code=500,
-        content={"detail": "Internal Server Error", "error": str(exc)},
-    )
 
 
 # ========================================

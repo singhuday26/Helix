@@ -1,0 +1,38 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- DNA Helix-inspired double strand design -->
+  <defs>
+    <linearGradient id="gradient1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0ea5e9;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0284c7;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="gradient2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#38bdf8;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0ea5e9;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Outer glow circle -->
+  <circle cx="32" cy="32" r="30" fill="url(#gradient1)" opacity="0.1"/>
+  
+  <!-- First helix strand (speculative) -->
+  <path d="M 16 10 Q 24 16, 32 16 T 48 16" stroke="url(#gradient1)" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <path d="M 16 24 Q 24 30, 32 30 T 48 30" stroke="url(#gradient1)" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <path d="M 16 38 Q 24 44, 32 44 T 48 44" stroke="url(#gradient1)" stroke-width="3" fill="none" stroke-linecap="round"/>
+  
+  <!-- Second helix strand (verification) -->
+  <path d="M 16 16 Q 24 10, 32 10 T 48 10" stroke="url(#gradient2)" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.7"/>
+  <path d="M 16 30 Q 24 24, 32 24 T 48 24" stroke="url(#gradient2)" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.7"/>
+  <path d="M 16 44 Q 24 38, 32 38 T 48 38" stroke="url(#gradient2)" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.7"/>
+  <path d="M 16 54 Q 24 50, 32 50 T 48 50" stroke="url(#gradient2)" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.7"/>
+  
+  <!-- Connection nodes representing draft-target verification -->
+  <circle cx="24" cy="13" r="2" fill="#38bdf8"/>
+  <circle cx="40" cy="13" r="2" fill="#38bdf8"/>
+  <circle cx="24" cy="27" r="2" fill="#38bdf8"/>
+  <circle cx="40" cy="27" r="2" fill="#38bdf8"/>
+  <circle cx="24" cy="41" r="2" fill="#38bdf8"/>
+  <circle cx="40" cy="41" r="2" fill="#38bdf8"/>
+  
+  <!-- Center acceleration indicator (lightning bolt) -->
+  <path d="M 34 18 L 30 28 L 34 28 L 30 38" stroke="#0ea5e9" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="0.6"/>
+</svg>

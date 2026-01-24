@@ -1,20 +1,36 @@
 import React from "react";
-import { BrowserRouter as Router } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import ErrorBoundary from "./components/ErrorBoundary";
+import Navbar from "./components/Navbar";
 import Hero from "./components/Hero";
-import Education from "./components/Education";
-import LiveDemo from "./components/LiveDemo";
+import Features from "./components/Features";
+import Technology from "./components/Technology";
+import Playground from "./components/Playground";
 import Footer from "./components/Footer";
+import ComparisonPage from "./pages/ComparisonPage";
+
+// Landing Page Component
+const LandingPage = () => (
+  <div className="min-h-screen bg-void-950">
+    <Navbar />
+    <Hero />
+    <Features />
+    <Technology />
+    <Playground />
+    <Footer />
+  </div>
+);
 
 function App() {
   return (
-    <Router>
-      <div className="min-h-screen bg-dark-950">
-        <Hero />
-        <Education />
-        <LiveDemo />
-        <Footer />
-      </div>
-    </Router>
+    <ErrorBoundary>
+      <Router>
+        <Routes>
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/comparison" element={<ComparisonPage />} />
+        </Routes>
+      </Router>
+    </ErrorBoundary>
   );
 }
 
