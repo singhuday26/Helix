@@ -32,6 +32,60 @@ logger = logging.getLogger(__name__)
 DEFAULT_SPECULATION_DEPTH = 4
 
 
+def get_model_device(model) -> str:
+    """
+    Safely get the device a model is on.
+    Handles CachedModelWrapper, regular models, and edge cases.
+    """
+    try:
+        # Handle CachedModelWrapper
+        if hasattr(model, 'model'):
+            actual_model = model.model
+        else:
+            actual_model = model
+        
+        # Get device from parameters
+        param = next(actual_model.parameters(), None)
+        if param is not None:
+            return str(param.device)
+        return 'cpu'
+    except Exception:
+        return 'cpu'
+
+
+def safe_to_device(tensor: torch.Tensor, device: str) -> torch.Tensor:
+    """
+    Safely move tensor to device, handling DirectML edge cases.
+    Returns tensor on target device, or CPU if transfer fails.
+    """
+    if tensor is None:
+        return None
+    
+    current_device = str(tensor.device)
+    target_device = str(device)
+    
+    # Already on target device
+    if current_device == target_device:
+        return tensor
+    
+    # Handle DirectML (privateuseone) transfers carefully
+    try:
+        return tensor.to(device)
+    except RuntimeError as e:
+        # If DirectML transfer fails, go through CPU
+        if 'privateuseone' in str(e).lower() or 'directml' in str(e).lower():
+            logger.warning(f"DirectML transfer failed, using CPU intermediary: {e}")
+            cpu_tensor = tensor.to('cpu')
+            if target_device != 'cpu':
+                try:
+                    return cpu_tensor.to(device)
+                except RuntimeError:
+                    logger.warning(f"Could not move to {device}, keeping on CPU")
+                    return cpu_tensor
+            return cpu_tensor
+        raise
+
+
 @dataclass
 class SpeculativeOutput:
     """Result of a speculative decoding step."""
@@ -127,6 +181,21 @@ def speculative_decode_step(
     device = input_ids.device
     batch_size = input_ids.shape[0]
     
+    # Get actual devices for draft and target models (for hybrid deployment)
+    def get_model_device(model):
+        """Get the device of a model, handling CachedModelWrapper."""
+        if hasattr(model, 'device'):
+            return model.device
+        if hasattr(model, 'model'):  # CachedModelWrapper
+            return get_model_device(model.model)
+        try:
+            return next(model.parameters()).device
+        except StopIteration:
+            return torch.device('cpu')
+    
+    draft_device = get_model_device(draft_model)
+    target_device = get_model_device(target_model)
+    
     # Check if models are CachedModelWrapper instances
     from src.kv_cache import CachedModelWrapper
     draft_uses_cache = isinstance(draft_model, CachedModelWrapper) and draft_seq_id is not None
@@ -137,7 +206,9 @@ def speculative_decode_step(
     # ========================================
     draft_tokens = []
     draft_probs_list = []
-    current_ids = input_ids.clone()
+    
+    # Ensure input_ids is on the draft device
+    current_ids = input_ids.to(draft_device)
     
     # Track positions for cache management
     initial_len = input_ids.shape[1]
@@ -154,7 +225,7 @@ def speculative_decode_step(
         
         token = sample_token(logits, temperature)
         draft_tokens.append(token.item())
-        draft_probs_list.append(probs[0].clone())
+        draft_probs_list.append(probs[0].clone().to('cpu'))  # Store on CPU for compatibility
         
         # Extend sequence for next iteration
         current_ids = torch.cat([current_ids, token.unsqueeze(0)], dim=-1)
@@ -162,9 +233,10 @@ def speculative_decode_step(
     # ========================================
     # PHASE 2: Target model verifies ALL tokens in one pass
     # ========================================
+    # Build target input on the target device (handles hybrid deployment)
     target_ids = torch.cat([
-        input_ids,
-        torch.tensor([draft_tokens], device=device)
+        input_ids.to(target_device),
+        torch.tensor([draft_tokens], device=target_device)
     ], dim=-1)
     
     if target_uses_cache:
@@ -212,14 +284,17 @@ def speculative_decode_step(
         target_logits_i = target_logits[0, logit_idx, :]
         target_probs = F.softmax(target_logits_i / temperature, dim=-1)
         
-        accept_prob = compute_acceptance_probability(target_probs, draft_probs, draft_token)
+        # Ensure draft_probs is on same device as target_probs for comparison
+        draft_probs_on_target = draft_probs.to(target_probs.device)
+        
+        accept_prob = compute_acceptance_probability(target_probs, draft_probs_on_target, draft_token)
         
         if torch.rand(1).item() < accept_prob:
             accepted_tokens.append(draft_token)
             num_accepted += 1
         else:
             # Rejected! Resample from adjusted distribution
-            adjusted_probs = torch.clamp(target_probs - draft_probs, min=0)
+            adjusted_probs = torch.clamp(target_probs - draft_probs_on_target, min=0)
             adjusted_probs = adjusted_probs / (adjusted_probs.sum() + 1e-10)
             
             resampled_token = torch.multinomial(adjusted_probs, num_samples=1).item()
@@ -234,7 +309,7 @@ def speculative_decode_step(
         bonus_token = sample_token(final_logits.unsqueeze(0), temperature).item()
         accepted_tokens.append(bonus_token)
     
-    # Build output
+    # Build output on the original input device
     tokens_tensor = torch.tensor([accepted_tokens], device=device)
     
     return SpeculativeOutput(
@@ -314,12 +389,9 @@ class SpeculativeDecoder:
         # Encode prompt
         input_ids = self.tokenizer.encode(prompt, return_tensors="pt")
         
-        # Get device from model
-        if hasattr(self.draft_model, 'model'):
-            device = next(self.draft_model.model.parameters()).device
-        else:
-            device = next(self.draft_model.parameters()).device
-        input_ids = input_ids.to(device)
+        # Get device from draft model (input_ids will be moved per-model in speculative_decode_step)
+        draft_device = get_model_device(self.draft_model)
+        input_ids = safe_to_device(input_ids, draft_device)
         
         generated_tokens = []
         stats = {
@@ -386,10 +458,10 @@ class SpeculativeDecoder:
                     self.target_seq_id = None
                 logger.debug("Freed cache sequences")
         
-        # Decode output
+        # Decode output - use CPU for final tensor concatenation (safe for all devices)
         full_ids = torch.cat([
-            self.tokenizer.encode(prompt, return_tensors="pt").to(device),
-            torch.tensor([generated_tokens], device=device)
+            self.tokenizer.encode(prompt, return_tensors="pt"),
+            torch.tensor([generated_tokens])
         ], dim=-1)
         
         output_text = self.tokenizer.decode(full_ids[0], skip_special_tokens=True)
@@ -476,12 +548,10 @@ class AdaptiveSpeculativeDecoder(SpeculativeDecoder):
             
         input_ids = self.tokenizer.encode(prompt, return_tensors="pt")
         
-        # Get device from model (handle CachedModelWrapper)
-        if hasattr(self.draft_model, 'model'):
-            device = next(self.draft_model.model.parameters()).device
-        else:
-            device = next(self.draft_model.parameters()).device
-        input_ids = input_ids.to(device)
+        # Get device from draft model (handle CachedModelWrapper)
+        # Input will be moved per-model in speculative_decode_step
+        draft_device = get_model_device(self.draft_model)
+        input_ids = safe_to_device(input_ids, draft_device)
         
         generated_tokens = []
         stats = {
@@ -600,8 +670,8 @@ def simple_generate(
     This is the naive approach we're trying to beat with speculative decoding.
     """
     input_ids = tokenizer.encode(prompt, return_tensors="pt")
-    device = next(model.parameters()).device
-    input_ids = input_ids.to(device)
+    device = get_model_device(model)
+    input_ids = safe_to_device(input_ids, device)
     
     generated = []
     
@@ -619,9 +689,10 @@ def simple_generate(
         token_2d = token.view(1, 1)
         input_ids = torch.cat([input_ids, token_2d], dim=-1)
     
+    # Use CPU for final concatenation (safe for all devices)
     full_ids = torch.cat([
-        tokenizer.encode(prompt, return_tensors="pt").to(device),
-        torch.tensor([generated], device=device)
+        tokenizer.encode(prompt, return_tensors="pt"),
+        torch.tensor([generated])
     ], dim=-1)
     
     return tokenizer.decode(full_ids[0], skip_special_tokens=True)

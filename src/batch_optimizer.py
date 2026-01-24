@@ -60,13 +60,17 @@ def batch_speculative_generate(
     
     batch_start = time.time()
     
+    # Safe device detection for hybrid deployment
     try:
-        device = next(draft_model.parameters()).device
+        if hasattr(draft_model, 'model'):
+            device = next(draft_model.model.parameters()).device
+        else:
+            device = next(draft_model.parameters()).device
     except StopIteration:
         raise RuntimeError("draft_model has no parameters")
     
     batch_size = len(prompts)
-    logger.info(f"Starting batch generation: {batch_size} prompts, max_tokens={max_tokens}")
+    logger.info(f"Starting batch generation: {batch_size} prompts, max_tokens={max_tokens}, device={device}")
     
     # Tokenize with padding
     try:
@@ -81,8 +85,18 @@ def batch_speculative_generate(
     except Exception as e:
         raise RuntimeError(f"Tokenization failed: {e}")
     
-    input_ids = encoded["input_ids"].to(device)
-    attention_mask = encoded["attention_mask"].to(device)
+    # Safe device transfer for hybrid DirectML/CPU deployment
+    try:
+        input_ids = encoded["input_ids"].to(device)
+        attention_mask = encoded["attention_mask"].to(device)
+    except RuntimeError as e:
+        # DirectML transfer may fail, try through CPU
+        if 'privateuseone' in str(e).lower():
+            logger.warning(f"DirectML transfer failed, using CPU: {e}")
+            input_ids = encoded["input_ids"].to('cpu').to(device)
+            attention_mask = encoded["attention_mask"].to('cpu').to(device)
+        else:
+            raise
     
     # Track generation state per sequence
     generated_tokens = [[] for _ in range(batch_size)]
