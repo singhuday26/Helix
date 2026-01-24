@@ -16,10 +16,14 @@ const Navbar = () => {
   }, []);
 
   const navLinks = [
-    { name: "Product", href: "/#features" },
-    { name: "Technology", href: "/#technology" },
-    { name: "Playground", href: "/#playground" },
-    { name: "Documentation", href: "/docs" },
+    { name: "Product", href: "/#features", external: false },
+    { name: "Technology", href: "/#technology", external: false },
+    { name: "Playground", href: "/#playground", external: false },
+    {
+      name: "Documentation",
+      href: "http://localhost:8000/docs",
+      external: true,
+    },
   ];
 
   return (
@@ -59,6 +63,8 @@ const Navbar = () => {
               <motion.a
                 key={link.name}
                 href={link.href}
+                target={link.external ? "_blank" : undefined}
+                rel={link.external ? "noopener noreferrer" : undefined}
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.1, duration: 0.3 }}
@@ -99,12 +105,12 @@ const Navbar = () => {
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: 0.5 }}
             >
-              <Link
-                to="/#playground"
+              <a
+                href="/comparison"
                 className="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-helix-draft to-helix-verify rounded-lg hover:shadow-lg hover:shadow-helix-draft/20 hover:-translate-y-0.5 transition-all duration-300"
               >
                 Try Demo
-              </Link>
+              </a>
             </motion.div>
           </div>
 
@@ -153,19 +159,21 @@ const Navbar = () => {
                 <a
                   key={link.name}
                   href={link.href}
+                  target={link.external ? "_blank" : undefined}
+                  rel={link.external ? "noopener noreferrer" : undefined}
                   className="block text-gray-400 hover:text-white transition-colors"
                   onClick={() => setIsMobileMenuOpen(false)}
                 >
                   {link.name}
                 </a>
               ))}
-              <Link
-                to="/comparison"
+              <a
+                href="/comparison"
                 className="block w-full px-4 py-2 text-center text-sm font-medium text-white bg-gradient-to-r from-helix-draft to-helix-verify rounded-lg"
                 onClick={() => setIsMobileMenuOpen(false)}
               >
                 Try Demo
-              </Link>
+              </a>
             </div>
           </motion.div>
         )}
