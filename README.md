@@ -167,11 +167,11 @@ flowchart TB
     GEN --> ENGINE
     BATCH --> ENGINE
     STREAM --> ENGINE
-    
+
     LOADER --> AMD
     LOADER --> NVIDIA
     LOADER --> CPU
-    
+
     SPEC <--> CACHE
     SPEC --> LOADER
 ```
@@ -188,7 +188,7 @@ sequenceDiagram
 
     U->>A: POST /generate
     A->>C: Allocate sequence
-    
+
     loop Until max_tokens or EOS
         A->>D: Generate K tokens (fast)
         D-->>A: [t1, t2, t3, t4]
@@ -196,7 +196,7 @@ sequenceDiagram
         T-->>A: Accept [t1, t2] ✓ Reject [t3, t4] ✗
         A->>C: Store accepted KV states
     end
-    
+
     A->>C: Free sequence
     A-->>U: Response + metrics
 ```
@@ -316,6 +316,7 @@ npm run build  # Verify build works
 **The Insight**: Draft model (TinyLlama-1.1B) is 10x faster than target (same model in demo). Even with 50% rejection rate, we generate 5 tokens for the price of 1 verification pass.
 
 **The Math**:
+
 - Standard: Load 3GB → compute 1 token → repeat 50 times = 150GB transferred
 - Speculative: Load 300MB (draft) → predict 4 tokens → load 3GB → verify 4 tokens → repeat 12 times = 40GB transferred
 - **Speedup**: 150GB / 40GB = 3.75x theoretical, 3.0x measured
@@ -369,4 +370,7 @@ MIT License
 **This is not a product. This is a systems engineering exercise.**
 
 The real innovation is not the code—it's understanding that **memory bandwidth is the bottleneck**, and trading idle resources for useful work is an asymmetric win.
-````
+
+```
+
+```

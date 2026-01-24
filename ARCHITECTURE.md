@@ -219,7 +219,7 @@ sequenceDiagram
     C->>A: POST /generate {prompt, max_tokens}
     A->>E: generate(prompt, config)
     E->>K: allocate_sequence(seq_id)
-    
+
     rect rgb(230, 240, 255)
         Note over E,K: Speculative Decoding Loop
         loop Until max_tokens or EOS
