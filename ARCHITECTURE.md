@@ -2,7 +2,23 @@
 
 **Project**: Helix - Speculative Decoding Inference Engine  
 **Track**: 01 — AI Systems & Infrastructure  
-**Author**: Uday Singh
+**Author**: Uday Singh  
+**Version**: 1.0.0
+
+---
+
+## Table of Contents
+
+1. [Executive Summary](#executive-summary)
+2. [The Core Bottleneck](#1-the-core-bottleneck-memory-bound-inference)
+3. [Speculative Decoding](#2-solution-part-1-speculative-decoding)
+4. [PagedAttention](#3-solution-part-2-pagedattention)
+5. [System Architecture](#4-system-architecture)
+6. [Engineering Decisions](#5-engineering-decisions--constraints)
+7. [Performance Benchmarks](#6-performance-benchmarks)
+8. [Failure Modes](#7-failure-modes--mitigations)
+9. [Production Considerations](#8-production-considerations-not-implemented)
+10. [Key Learnings](#9-key-learnings)
 
 ---
 
@@ -138,39 +154,161 @@ You cannot use `torch.matmul` or cuBLAS primitives directly on non-contiguous te
 
 ## 4. System Architecture
 
-### Component Breakdown
+### High-Level Overview
 
+```mermaid
+flowchart TB
+    subgraph CLIENT["👤 Client Layer"]
+        REST["REST API<br/>curl / Postman"]
+        WEB["Web Frontend<br/>React + SSE"]
+        SDK["Python SDK<br/>requests"]
+    end
+
+    subgraph API["🌐 API Layer (src/api.py)"]
+        GEN["POST /generate<br/>Synchronous"]
+        BATCH["POST /generate/batch<br/>Vectorized"]
+        STREAM["POST /generate/stream<br/>SSE Real-time"]
+        HEALTH["GET /health<br/>System Status"]
+        METRICS["GET /metrics<br/>Performance"]
+    end
+
+    subgraph ENGINE["⚙️ Inference Engine (src/inference.py)"]
+        HELIX["HelixEngine<br/>Orchestrator"]
+        SPEC["SpeculativeDecoder<br/>Draft + Verify Loop"]
+        CACHE["PagedKVCache<br/>Memory Manager"]
+        BOPT["BatchOptimizer<br/>Parallel Processing"]
+    end
+
+    subgraph MODELS["🧠 Model Layer (src/model_loader.py)"]
+        DRAFT["Draft Model<br/>TinyLlama 1.1B"]
+        TARGET["Target Model<br/>Llama 3 8B"]
+    end
+
+    subgraph HARDWARE["🖥️ Hardware Abstraction"]
+        DML["DirectML<br/>AMD GPU"]
+        CUDA["CUDA<br/>NVIDIA GPU"]
+        CPU["CPU<br/>Fallback"]
+    end
+
+    CLIENT --> API
+    API --> ENGINE
+    HELIX --> SPEC
+    HELIX --> CACHE
+    HELIX --> BOPT
+    SPEC --> MODELS
+    MODELS --> HARDWARE
+
+    style DML fill:#ed1c24,color:#fff
+    style CUDA fill:#76b900,color:#fff
+    style SPEC fill:#0066cc,color:#fff
+    style CACHE fill:#ff9900,color:#fff
 ```
-┌─────────────────────────────────────────────────────┐
-│                   FastAPI Server                    │
-│  /generate, /generate/batch, /generate/stream       │
-└─────────────────┬───────────────────────────────────┘
-                  │
-                  ▼
-┌─────────────────────────────────────────────────────┐
-│                  HelixEngine                        │
-│  - Model lifecycle (load/unload)                   │
-│  - Request routing (sync/async/batch)              │
-│  - Memory management (cleanup on OOM)              │
-└─────────────────┬───────────────────────────────────┘
-                  │
-        ┌─────────┴─────────┐
-        ▼                   ▼
-┌───────────────┐   ┌──────────────────┐
-│ Speculative   │   │  PagedKVCache    │
-│ Decoder       │◄──│  (Phase 2)       │
-│ - Draft gen   │   │  - Block alloc   │
-│ - Verification│   │  - Virtual mem   │
-│ - Acceptance  │   │  - Defrag        │
-└───────────────┘   └──────────────────┘
-        │
-        ▼
-┌─────────────────────────────────────────────────────┐
-│              Model Loader (DirectML)                │
-│  - Prioritizes AMD GPU (torch-directml)            │
-│  - Fallback: CPU                                   │
-│  - Device detection: privateuseone → cuda → cpu    │
-└─────────────────────────────────────────────────────┘
+
+### Speculative Decoding Sequence
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Client
+    participant A as API Server
+    participant E as HelixEngine
+    participant D as Draft Model
+    participant T as Target Model
+    participant K as KV Cache
+
+    C->>A: POST /generate {prompt, max_tokens}
+    A->>E: generate(prompt, config)
+    E->>K: allocate_sequence(seq_id)
+    
+    rect rgb(230, 240, 255)
+        Note over E,K: Speculative Decoding Loop
+        loop Until max_tokens or EOS
+            E->>D: generate(K=4 tokens)
+            D-->>E: draft_tokens [t1,t2,t3,t4]
+            E->>T: verify(draft_tokens) [single forward pass]
+            T-->>E: logits for all positions
+            E->>E: rejection_sampling(draft, target)
+            E-->>E: accepted=[t1,t2], rejected=[t3,t4]
+            E->>K: store(accepted_kv_states)
+        end
+    end
+
+    E->>K: free_sequence(seq_id)
+    E-->>A: GenerationResult
+    A-->>C: JSON {text, tokens_per_sec, acceptance_rate}
+```
+
+### PagedAttention Memory Architecture
+
+```mermaid
+flowchart TB
+    subgraph LOGICAL["📋 Logical View (What the model sees)"]
+        direction LR
+        S1["Sequence 1<br/>Tokens: 0-47<br/>(48 tokens)"]
+        S2["Sequence 2<br/>Tokens: 0-31<br/>(32 tokens)"]
+        S3["Sequence 3<br/>Tokens: 0-15<br/>(16 tokens)"]
+    end
+
+    subgraph MAPPING["🗺️ Block Table (Virtual → Physical)"]
+        BT1["Seq 1 → Blocks [0, 3, 6]"]
+        BT2["Seq 2 → Blocks [2, 5]"]
+        BT3["Seq 3 → Blocks [1]"]
+    end
+
+    subgraph PHYSICAL["💾 Physical VRAM (Non-contiguous)"]
+        direction LR
+        B0["Block 0<br/>Seq 1: 0-15"]
+        B1["Block 1<br/>Seq 3: 0-15"]
+        B2["Block 2<br/>Seq 2: 0-15"]
+        B3["Block 3<br/>Seq 1: 16-31"]
+        B4["Block 4<br/>FREE"]
+        B5["Block 5<br/>Seq 2: 16-31"]
+        B6["Block 6<br/>Seq 1: 32-47"]
+        B7["Block 7<br/>FREE"]
+    end
+
+    S1 -.->|"lookup"| BT1
+    S2 -.->|"lookup"| BT2
+    S3 -.->|"lookup"| BT3
+
+    BT1 -.-> B0
+    BT1 -.-> B3
+    BT1 -.-> B6
+    BT2 -.-> B2
+    BT2 -.-> B5
+    BT3 -.-> B1
+
+    style B4 fill:#90EE90
+    style B7 fill:#90EE90
+```
+
+### Component Interaction
+
+```mermaid
+flowchart LR
+    subgraph INPUT["Input Processing"]
+        REQ["HTTP Request"]
+        TOK["Tokenizer"]
+    end
+
+    subgraph CORE["Core Engine"]
+        ENG["HelixEngine"]
+        SPEC["SpeculativeDecoder"]
+        KV["PagedKVCache"]
+    end
+
+    subgraph OUTPUT["Output Processing"]
+        DET["Detokenizer"]
+        RES["JSON Response"]
+    end
+
+    REQ --> TOK --> ENG
+    ENG <--> SPEC
+    SPEC <--> KV
+    ENG --> DET --> RES
+
+    style SPEC fill:#4a90d9,color:#fff
+    style KV fill:#f5a623,color:#fff
 ```
 
 ### Data Flow (Single Request)

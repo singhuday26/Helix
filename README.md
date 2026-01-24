@@ -2,7 +2,12 @@
 
 **Speculative Decoding Inference Engine for Consumer Hardware**
 
-> Radiothon 2026 | Track 01: AI Systems & Infrastructure  
+[![Python 3.10+](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://python.org)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Tests](https://img.shields.io/badge/Tests-100%25-brightgreen.svg)](validate_submission.py)
+[![DirectML](https://img.shields.io/badge/DirectML-AMD%20GPU-red.svg)](https://github.com/microsoft/DirectML)
+
+> **Radiothon 2026** | Track 01: AI Systems & Infrastructure  
 > **Problem**: LLM inference is memory-bandwidth bound  
 > **Solution**: Trade idle memory cycles for useful compute (3-5x speedup)
 
@@ -136,20 +141,95 @@ curl -X POST http://localhost:8000/generate/batch \
 
 ## Architecture
 
+### System Overview
+
+```mermaid
+flowchart TB
+    subgraph API["🌐 FastAPI Server (api.py)"]
+        GEN["/generate"]
+        BATCH["/generate/batch"]
+        STREAM["/generate/stream"]
+        HEALTH["/health"]
+    end
+
+    subgraph ENGINE["⚙️ HelixEngine (inference.py)"]
+        LOADER["ModelLoader<br/>DirectML Priority"]
+        CACHE["PagedKVCache<br/>Block Allocation"]
+        SPEC["SpeculativeDecoder<br/>Draft + Verify"]
+    end
+
+    subgraph HARDWARE["🖥️ Hardware Layer"]
+        AMD["AMD GPU<br/>(DirectML)"]
+        NVIDIA["NVIDIA GPU<br/>(CUDA)"]
+        CPU["CPU<br/>(Fallback)"]
+    end
+
+    GEN --> ENGINE
+    BATCH --> ENGINE
+    STREAM --> ENGINE
+    
+    LOADER --> AMD
+    LOADER --> NVIDIA
+    LOADER --> CPU
+    
+    SPEC <--> CACHE
+    SPEC --> LOADER
 ```
-┌─────────────────────────────────────────────────────────┐
-│                      FastAPI Server                      │
-│                     (src/api.py)                         │
-└─────────────────────┬───────────────────────────────────┘
-                      │
-                      ▼
-┌─────────────────────────────────────────────────────────┐
-│                    HelixEngine                           │
-│                  (src/inference.py)                      │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────┐  │
-│  │ ModelLoader │  │ PagedCache  │  │ SpeculativeLoop │  │
-│  └─────────────┘  └─────────────┘  └─────────────────┘  │
-└─────────────────────────────────────────────────────────┘
+
+### Speculative Decoding Flow
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant A as API
+    participant D as Draft Model
+    participant T as Target Model
+    participant C as KV Cache
+
+    U->>A: POST /generate
+    A->>C: Allocate sequence
+    
+    loop Until max_tokens or EOS
+        A->>D: Generate K tokens (fast)
+        D-->>A: [t1, t2, t3, t4]
+        A->>T: Verify all K tokens (one pass)
+        T-->>A: Accept [t1, t2] ✓ Reject [t3, t4] ✗
+        A->>C: Store accepted KV states
+    end
+    
+    A->>C: Free sequence
+    A-->>U: Response + metrics
+```
+
+### PagedAttention Memory Model
+
+```mermaid
+flowchart LR
+    subgraph VIRTUAL["Virtual Memory (Logical)"]
+        V1["Seq 1: Block 0-1-2"]
+        V2["Seq 2: Block 0-1"]
+        V3["Seq 3: Block 0"]
+    end
+
+    subgraph PHYSICAL["Physical Memory (GPU VRAM)"]
+        P0["Block 0: Seq 1"]
+        P1["Block 1: Seq 3"]
+        P2["Block 2: Seq 2"]
+        P3["Block 3: Seq 1"]
+        P4["Block 4: FREE"]
+        P5["Block 5: Seq 2"]
+        P6["Block 6: Seq 1"]
+    end
+
+    subgraph TABLE["Block Table"]
+        T1["Seq 1 → [0,3,6]"]
+        T2["Seq 2 → [2,5]"]
+        T3["Seq 3 → [1]"]
+    end
+
+    V1 -.-> T1
+    V2 -.-> T2
+    V3 -.-> T3
 ```
 
 ## Project Structure
@@ -219,11 +299,15 @@ python test_streaming.py
 
 ### Frontend Tests
 
-````bash
+```bash
 cd frontend
 npm run lint
 npm run build  # Verify build works
-```Systems Engineering Deep Dive
+```
+
+---
+
+## Systems Engineering Deep Dive
 
 ### Why Speculative Decoding Works
 
