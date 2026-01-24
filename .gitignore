@@ -2,12 +2,15 @@
 __pycache__/
 *.py[cod]
 *$py.class
+*.pyc
+*.pyo
 
 # Environments
 .env
 .venv
 env/
 venv/
+ven/
 ENV/
 env.bak/
 venv.bak/

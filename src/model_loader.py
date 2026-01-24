@@ -5,6 +5,7 @@ Handles loading of draft (small) and target (larger) models
 with DirectML support for AMD GPUs.
 """
 
+import os
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from typing import Optional, Tuple, Literal
@@ -15,11 +16,30 @@ logger = logging.getLogger(__name__)
 DeviceType = Literal["privateuseone", "cuda", "mps", "cpu"]
 
 
-def get_device() -> DeviceType:
-    """Auto-detect the best available device."""
+def get_device(force_cpu: bool = None) -> DeviceType:
+    """
+    Auto-detect the best available device.
+    
+    Args:
+        force_cpu: If True, always use CPU. If None, checks HELIX_FORCE_CPU env var.
+    
+    Returns:
+        str: Device type ("cpu", "cuda", "mps", or "privateuseone")
+    
+    Trade-off: CPU is slower but more reliable (no OOM issues on DirectML).
+    """
+    # Check if CPU mode is forced via parameter or environment variable
+    if force_cpu is None:
+        force_cpu = os.getenv("HELIX_FORCE_CPU", "").lower() in ("1", "true", "yes")
+    
+    if force_cpu:
+        logger.info("Force CPU mode enabled - skipping GPU detection")
+        return "cpu"
+    
     # Try DirectML first (AMD GPU on Windows)
     try:
         import torch_directml
+        logger.info("DirectML available - attempting GPU inference")
         return "privateuseone"  # DirectML device name
     except ImportError:
         pass
@@ -61,9 +81,10 @@ class ModelPair:
         target_device: Optional[DeviceType] = None,
         device: Optional[DeviceType] = None, # Legacy: sets both if above are None
         quantize: bool = False,
+        force_cpu: bool = None,  # New parameter for CPU mode
     ):
         # Default strategy: Draft on GPU (speed), Target on CPU (capacity)
-        global_device = device or get_device()
+        global_device = device or get_device(force_cpu=force_cpu)
         self.draft_device = draft_device or global_device
         
         # If target device not specified, use CPU if global is privateuseone (to save VRAM)

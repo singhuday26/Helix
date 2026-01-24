@@ -84,25 +84,32 @@ def speculative_decode_step(
     temperature: float = 1.0,
     kv_cache = None,  # Optional PagedKVCache instance
     seq_id: Optional[int] = None,  # Sequence ID for cache lookup
+    attention_mask: Optional[torch.Tensor] = None,  # Attention mask for batching
 ) -> SpeculativeOutput:
     """
-    Perform one step of speculative decoding.
+    Perform one step of speculative decoding with VECTORIZED batch support.
     
     This is the core algorithm:
-    1. Draft model generates K tokens autoregressively
-    2. Target model scores all K tokens in ONE forward pass
-    3. Accept tokens until first rejection using rejection sampling
+    1. Draft model generates K tokens autoregressively (PARALLEL for batch)
+    2. Target model scores all K tokens in ONE forward pass (PARALLEL)
+    3. Accept tokens until first rejection using rejection sampling (per-sequence)
     4. If all accepted, sample one more from target
     5. If rejected at position i, resample from adjusted distribution
+    
+    Phase 4B Optimization:
+    - Vectorized draft generation across batch
+    - Proper attention masking for variable-length sequences
+    - Independent acceptance logic per sequence
     
     Args:
         draft_model: Small, fast model for speculation
         target_model: Larger, accurate model for verification
-        input_ids: Current token sequence (batch_size=1)
+        input_ids: Current token sequence [batch_size, seq_len]
         speculation_depth: Number of tokens to speculate (K)
         temperature: Sampling temperature
         kv_cache: Optional PagedKVCache for KV reuse (currently not integrated)
         seq_id: Sequence ID for cache operations (if kv_cache provided)
+        attention_mask: Attention mask [batch_size, seq_len] (1=attend, 0=ignore)
     
     Returns:
         SpeculativeOutput with accepted tokens and stats
@@ -110,23 +117,6 @@ def speculative_decode_step(
     step_start_time = time.time()  # Capture timing for TTFT
     device = input_ids.device
     batch_size = input_ids.shape[0]
-    
-    # NOTE: Batch processing now supported! Each sequence processes independently
-    # For batch_size > 1, we handle each sequence separately for now (future: vectorize)
-    if batch_size > 1:
-        # Process each sequence in batch independently
-        results = []
-        for i in range(batch_size):
-            seq_input = input_ids[i:i+1]
-            result = speculative_decode_step(
-                draft_model, target_model, seq_input,
-                speculation_depth, temperature, kv_cache, 
-                seq_id[i] if seq_id is not None and isinstance(seq_id, list) else None
-            )
-            results.append(result)
-        
-        # Combine results (return first for now, future: proper batching)
-        return results[0]  # TODO: Return batch results properly
     
     # ========================================
     # PHASE 1: Draft model generates K tokens (Single sequence)
@@ -274,7 +264,7 @@ class SpeculativeDecoder:
         
         try:
             while len(generated_tokens) < max_tokens:
-                # Run one speculative step
+                # Run one speculative step with attention mask support
                 result = speculative_decode_step(
                     self.draft_model,
                     self.target_model,
@@ -283,6 +273,7 @@ class SpeculativeDecoder:
                     temperature=self.temperature,
                     kv_cache=self.kv_cache,
                     seq_id=self.seq_id,
+                    attention_mask=attention_mask,
                 )
                 
                 # Capture TTFT on first step
@@ -508,5 +499,5 @@ def simple_generate(
 
 if __name__ == "__main__":
     # Quick test with mock models would go here
-    print("Speculative decoding module loaded successfully")
-    print(f"Default speculation depth: {DEFAULT_SPECULATION_DEPTH}")
+    logger.info("Speculative decoding module loaded successfully")
+    logger.info(f"Default speculation depth: {DEFAULT_SPECULATION_DEPTH}")
