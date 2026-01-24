@@ -42,3 +42,7 @@ wheels/
 
 # Logs
 *.log
+
+# Frontend dependencies
+frontend/node_modules/
+node_modules/
