@@ -214,13 +214,32 @@ const Playground = () => {
                 </label>
                 <input
                   type="number"
+                  min="20"
+                  max="500"
                   value={config.max_tokens}
-                  onChange={(e) =>
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    // Allow empty or any number while typing
+                    if (value === "" || !isNaN(parseInt(value))) {
+                      setConfig({
+                        ...config,
+                        max_tokens: value === "" ? "" : parseInt(value),
+                      });
+                    }
+                  }}
+                  onBlur={(e) => {
+                    // Validate on blur - enforce min/max
+                    let value = parseInt(e.target.value);
+                    if (isNaN(value) || value < 20) {
+                      value = 50; // default
+                    } else if (value > 500) {
+                      value = 500;
+                    }
                     setConfig({
                       ...config,
-                      max_tokens: parseInt(e.target.value) || 50,
-                    })
-                  }
+                      max_tokens: value,
+                    });
+                  }}
                   disabled={isStreaming}
                   className="w-full px-3 py-2 text-sm bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:border-helix-draft"
                 />
