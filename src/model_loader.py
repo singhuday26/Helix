@@ -17,7 +17,7 @@ import os
 import sys
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
-from typing import Optional, Tuple, Literal, Dict, Any
+from typing import Optional, Tuple, Literal, Dict, Any, List
 import logging
 import warnings
 
