@@ -565,6 +565,25 @@ class CachedModelWrapper:
         past_key_values = None
         cached_len = 0
         
+        # CRITICAL: Ensure input_ids is on model's device (handles hybrid DirectML/CPU)
+        model_device = self.device
+        if str(input_ids.device) != str(model_device):
+            try:
+                input_ids = input_ids.to(model_device)
+            except RuntimeError as e:
+                # DirectML transfer may fail, try CPU intermediary
+                if 'privateuseone' in str(e).lower():
+                    input_ids = input_ids.to('cpu').to(model_device)
+                else:
+                    raise
+        
+        # Also move attention_mask if provided
+        if attention_mask is not None and str(attention_mask.device) != str(model_device):
+            try:
+                attention_mask = attention_mask.to(model_device)
+            except RuntimeError:
+                attention_mask = attention_mask.to('cpu').to(model_device)
+        
         # Retrieve cached KV if available
         if self.use_cache and seq_id is not None:
             past_key_values = self.kv_cache.get_hf_cache(seq_id, device=str(self.device))

@@ -130,8 +130,8 @@ class HelixEngine:
         self._model_pair.load_all()
         
         # Initialize PagedKVCache for memory-efficient KV storage
-        # NOTE: Currently wired but not actively used in forward passes
-        # Future work: Integrate with model attention layers for KV reuse
+        # NOTE: Use CPU for KV cache storage to work with hybrid deployment (DirectML + CPU models)
+        # The cache tensors are moved to model device on-demand during forward passes
         try:
             self._kv_cache = PagedKVCache(
                 num_blocks=512,  # Trade-off: More blocks = more memory but higher batch size
@@ -140,9 +140,9 @@ class HelixEngine:
                 num_heads=4,     # TinyLlama GQA heads
                 head_dim=64,
                 dtype=torch.float16,
-                device=str(self.device),
+                device="cpu",    # CRITICAL: Use CPU for hybrid deployment compatibility
             )
-            logger.info("PagedKVCache initialized")
+            logger.info("PagedKVCache initialized on CPU (for hybrid DirectML/CPU deployment)")
         except Exception as e:
             logger.warning(f"Failed to initialize KV cache: {e}. Continuing without cache.")
             self._kv_cache = None
@@ -429,14 +429,13 @@ class HelixEngine:
         
         # Tokenize input
         input_ids = self._model_pair.tokenizer.encode(formatted_prompt, return_tensors="pt")
-        input_ids = input_ids.to(self.device)
         
         # Setup for generation
         start_time = time.time()
         generated_tokens = []
         stop_token_id = self._model_pair.tokenizer.eos_token_id
         
-        # Configure speculative decoder
+        # Configure speculative decoder and get correct device
         if config.use_speculative:
             self._speculative_decoder.speculation_depth = config.speculation_depth
             self._speculative_decoder.temperature = config.temperature
@@ -446,6 +445,11 @@ class HelixEngine:
             # Fallback to draft model for non-speculative
             draft_model = self._model_pair.draft_model
             target_model = None
+        
+        # Get correct device from model (handles CachedModelWrapper and hybrid deployment)
+        from src.speculative import get_model_device, safe_to_device
+        model_device = get_model_device(draft_model)
+        input_ids = safe_to_device(input_ids, model_device)
         
         # Allocate KV cache if using PagedKVCache
         seq_id = None
@@ -540,8 +544,9 @@ class HelixEngine:
                         )
                         return
                 
-                # Update current_ids for next iteration
-                current_ids = torch.cat([current_ids, torch.tensor([new_token_ids]).to(self.device)], dim=1)
+                # Update current_ids for next iteration (use model_device, not self.device)
+                new_tokens_tensor = safe_to_device(torch.tensor([new_token_ids]), model_device)
+                current_ids = torch.cat([current_ids, new_tokens_tensor], dim=1)
         
         finally:
             # Free KV cache
