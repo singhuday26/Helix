@@ -264,7 +264,7 @@ class SpeculativeDecoder:
         
         try:
             while len(generated_tokens) < max_tokens:
-                # Run one speculative step with attention mask support
+                # Run one speculative step (attention_mask not needed for single sequence)
                 result = speculative_decode_step(
                     self.draft_model,
                     self.target_model,
@@ -273,7 +273,7 @@ class SpeculativeDecoder:
                     temperature=self.temperature,
                     kv_cache=self.kv_cache,
                     seq_id=self.seq_id,
-                    attention_mask=attention_mask,
+                    attention_mask=None,  # Not needed for single sequence generation
                 )
                 
                 # Capture TTFT on first step
@@ -449,8 +449,19 @@ class AdaptiveSpeculativeDecoder(SpeculativeDecoder):
             
         # Decode output
         output_text = self.tokenizer.decode(generated_tokens, skip_special_tokens=True)
+        stats["total_tokens"] = len(generated_tokens)
         stats["final_depth"] = self.current_depth
-        stats["avg_depth"] = sum(stats["depth_history"]) / len(stats["depth_history"])
+        stats["avg_depth"] = sum(stats["depth_history"]) / len(stats["depth_history"]) if stats["depth_history"] else 0
+        
+        # Calculate overall acceptance rate
+        if stats["acceptance_rates"]:
+            stats["acceptance_rate"] = sum(stats["acceptance_rates"]) / len(stats["acceptance_rates"])
+            stats["total_accepted"] = sum(int(r * self.speculation_depth) for r in stats["acceptance_rates"])
+            stats["total_drafted"] = len(stats["acceptance_rates"]) * self.speculation_depth
+        else:
+            stats["acceptance_rate"] = 0.0
+            stats["total_accepted"] = 0
+            stats["total_drafted"] = 0
         
         return output_text, stats
 
@@ -487,7 +498,9 @@ def simple_generate(
             break
         
         generated.append(token.item())
-        input_ids = torch.cat([input_ids, token.unsqueeze(0).unsqueeze(0)], dim=-1)
+        # token is 0D or 1D, need to reshape to [1, 1] for concatenation
+        token_2d = token.view(1, 1)
+        input_ids = torch.cat([input_ids, token_2d], dim=-1)
     
     full_ids = torch.cat([
         tokenizer.encode(prompt, return_tensors="pt").to(device),

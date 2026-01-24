@@ -194,23 +194,32 @@ class ModelPair:
             model.eval()
             
             # Post-load verification
-            logger.info(f"Verifying {model_type} model on {device}...")
+            # Get the actual device the model is on (might differ from requested device)
+            actual_device = next(model.parameters()).device
+            logger.info(f"Verifying {model_type} model on {actual_device}...")
             try:
-                # Create dummy input using model's vocabulary
+                # Create dummy input on the ACTUAL device the model is on
                 # Use a safe token ID that exists in all models (typically 0-100 range)
                 # For TinyLlama and GPT-2, token ID 1 is safe
-                dummy_input = torch.tensor([[1]], device=device)
+                dummy_input = torch.tensor([[1]], device=actual_device)
                 with torch.no_grad():
                     _ = model(dummy_input)
-                logger.info(f"{model_type.capitalize()} model verified successfully")
+                logger.info(f"{model_type.capitalize()} model verified successfully on {actual_device}")
             except Exception as e:
                 logger.error(f"Verification failed for {model_type} model: {e}")
                 # Fallback to CPU if GPU verification fails
                 if device == "privateuseone":
                     logger.warning("Falling back to CPU due to verification failure")
                     model = model.to("cpu")
-                    # Note: we can't easily update self.draft_device/target_device here 
-                    # as it's a primitive string copy, but this fixes the returned model model.
+                    # Try verification again on CPU
+                    try:
+                        cpu_input = torch.tensor([[1]], device="cpu")
+                        with torch.no_grad():
+                            _ = model(cpu_input)
+                        logger.info(f"{model_type.capitalize()} model verified on CPU fallback")
+                    except Exception as cpu_e:
+                        logger.error(f"CPU verification also failed: {cpu_e}")
+                        raise
                 else:
                     raise
             
