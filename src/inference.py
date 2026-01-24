@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 import logging
 import asyncio
 
-from src.model_loader import ModelPair, get_device
+from src.model_loader import ModelPair, get_device, get_validated_device, detect_device_capabilities
 from src.speculative import (
     SpeculativeDecoder, 
     AdaptiveSpeculativeDecoder,
@@ -94,7 +94,14 @@ class HelixEngine:
         # Target -> CPU for capacity (TinyLlama fits in RAM)
         # Or force CPU for reliability
         self.force_cpu = force_cpu
-        self.device = device or get_device(force_cpu=force_cpu) # Main device logic
+        
+        # Use validated device to ensure it actually works
+        self.device = device or get_validated_device(force_cpu=force_cpu)
+        
+        # Log device capabilities for debugging
+        capabilities = detect_device_capabilities()
+        logger.info(f"Device capabilities: {capabilities}")
+        
         self.model_id = model_id
         self.target_model_id = target_model_id
         self.quantize = quantize
@@ -122,8 +129,8 @@ class HelixEngine:
         self._model_pair = ModelPair(
             draft_model_id=self.model_id,
             target_model_id=self.target_model_id,
-            draft_device="privateuseone" if get_device(force_cpu=self.force_cpu) == "privateuseone" else "cpu",
-            target_device="cpu", # Force target to CPU to save VRAM
+            draft_device=self.device if self.device != "cpu" else "cpu",
+            target_device="cpu",  # Force target to CPU to save VRAM
             quantize=self.quantize,
             force_cpu=self.force_cpu,  # Pass force_cpu to ModelPair
         )
