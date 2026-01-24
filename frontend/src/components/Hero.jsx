@@ -5,6 +5,9 @@ import { Link } from "react-router-dom";
 const Hero = () => {
   return (
     <section className="relative min-h-screen flex items-center justify-center overflow-hidden pt-16">
+      {/* DNA Helix Hero Background */}
+      <div className="helix-bg-hero" aria-hidden="true" />
+
       {/* Background */}
       <div className="absolute inset-0 bg-void-950">
         {/* Subtle grid */}
@@ -86,7 +89,7 @@ const Hero = () => {
           </Link>
           <a
             href="#playground"
-            className="px-6 py-3 text-white font-medium rounded-lg border border-white/20 hover:bg-white/5 transition-colors"
+            className="px-6 py-3 text-white font-medium rounded-lg border border-white/20 hover:bg-white/5 hover:border-white/30 hover:-translate-y-0.5 transition-all duration-300"
           >
             Open Playground
           </a>
@@ -105,12 +108,24 @@ const Hero = () => {
             { value: "<100ms", label: "Time to First Token" },
             { value: "~2GB", label: "Memory Footprint" },
           ].map((stat, i) => (
-            <div key={stat.label} className="text-center">
-              <div className="text-3xl font-bold text-white mb-1">
+            <motion.div
+              key={stat.label}
+              initial={{ opacity: 0, scale: 0.5 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{
+                delay: 0.5 + i * 0.1,
+                type: "spring",
+                stiffness: 100,
+              }}
+              className="text-center group cursor-default"
+            >
+              <div className="text-3xl font-bold text-white mb-1 group-hover:text-transparent group-hover:bg-gradient-to-r group-hover:from-helix-draft group-hover:to-helix-verify group-hover:bg-clip-text transition-all duration-300">
                 {stat.value}
               </div>
-              <div className="text-sm text-gray-500">{stat.label}</div>
-            </div>
+              <div className="text-sm text-gray-500 group-hover:text-gray-400 transition-colors">
+                {stat.label}
+              </div>
+            </motion.div>
           ))}
         </motion.div>
       </div>

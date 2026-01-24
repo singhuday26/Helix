@@ -44,7 +44,7 @@ def run_benchmark():
         print(f"      ✗ Failed to load models: {e}")
         return
         
-    device = model_pair.device
+    device = model_pair.draft_device
     tokenizer = model_pair.tokenizer
     
     # Test Prompts

@@ -169,10 +169,10 @@ const Playground = () => {
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
                   disabled={isStreaming}
-                  className={`flex-1 px-4 py-2 text-sm font-medium rounded-md transition-all ${
+                  className={`flex-1 px-4 py-2 text-sm font-medium rounded-md transition-all duration-300 ${
                     activeTab === tab.id
-                      ? "bg-white text-void-950"
-                      : "text-gray-400 hover:text-white"
+                      ? "bg-white text-void-950 shadow-lg"
+                      : "text-gray-400 hover:text-white hover:bg-white/5"
                   }`}
                 >
                   {tab.label}
@@ -190,7 +190,7 @@ const Playground = () => {
                       key={i}
                       onClick={() => setPrompt(preset.prompt)}
                       disabled={isStreaming}
-                      className="px-2 py-1 text-xs text-gray-500 hover:text-white bg-white/5 rounded transition-colors"
+                      className="px-2 py-1 text-xs text-gray-500 hover:text-white bg-white/5 hover:bg-white/10 rounded hover:scale-105 transition-all duration-200"
                     >
                       {preset.label}
                     </button>

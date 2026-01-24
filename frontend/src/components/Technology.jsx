@@ -84,8 +84,14 @@ const steps = [
 
 const Technology = () => {
   return (
-    <section id="technology" className="py-24 bg-void-900">
-      <div className="max-w-6xl mx-auto px-6">
+    <section
+      id="technology"
+      className="py-24 bg-void-900 relative overflow-hidden"
+    >
+      {/* DNA Helix Background - Right Side */}
+      <div className="helix-bg-section right" aria-hidden="true" />
+
+      <div className="max-w-6xl mx-auto px-6 relative z-10">
         {/* Section Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -107,30 +113,34 @@ const Technology = () => {
           {steps.map((step, index) => (
             <motion.div
               key={step.number}
-              initial={{ opacity: 0, x: index % 2 === 0 ? -20 : 20 }}
+              initial={{ opacity: 0, x: index % 2 === 0 ? -30 : 30 }}
               whileInView={{ opacity: 1, x: 0 }}
               viewport={{ once: true }}
-              transition={{ delay: index * 0.15 }}
-              className="flex flex-col md:flex-row gap-8 items-start"
+              transition={{
+                delay: index * 0.15,
+                type: "spring",
+                stiffness: 50,
+              }}
+              className="flex flex-col md:flex-row gap-8 items-start group"
             >
               {/* Step Content */}
               <div className="flex-1 order-2 md:order-1">
                 <div className="flex items-center gap-4 mb-4">
-                  <span className="text-5xl font-bold text-white/10">
+                  <span className="text-5xl font-bold text-white/10 group-hover:text-white/20 transition-colors">
                     {step.number}
                   </span>
-                  <h3 className="text-xl font-semibold text-white">
+                  <h3 className="text-xl font-semibold text-white group-hover:text-transparent group-hover:bg-gradient-to-r group-hover:from-helix-draft group-hover:to-helix-verify group-hover:bg-clip-text transition-all duration-300">
                     {step.title}
                   </h3>
                 </div>
-                <p className="text-gray-400 leading-relaxed mb-6">
+                <p className="text-gray-400 leading-relaxed mb-6 group-hover:text-gray-300 transition-colors">
                   {step.description}
                 </p>
               </div>
 
               {/* Visual */}
               <div className="flex-1 order-1 md:order-2">
-                <div className="p-6 rounded-xl bg-void-950 border border-white/5">
+                <div className="p-6 rounded-xl bg-void-950 border border-white/5 group-hover:border-helix-draft/30 group-hover:shadow-lg group-hover:shadow-helix-draft/5 transition-all duration-300">
                   {step.visual}
                 </div>
               </div>

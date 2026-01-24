@@ -126,8 +126,14 @@ const features = [
 
 const Features = () => {
   return (
-    <section id="features" className="py-24 bg-void-950">
-      <div className="max-w-7xl mx-auto px-6">
+    <section
+      id="features"
+      className="py-24 bg-void-950 relative overflow-hidden"
+    >
+      {/* DNA Helix Background - Left Side */}
+      <div className="helix-bg-section left" aria-hidden="true" />
+
+      <div className="max-w-7xl mx-auto px-6 relative z-10">
         {/* Section Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -153,9 +159,10 @@ const Features = () => {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ delay: index * 0.1 }}
-              className="group p-6 rounded-2xl bg-white/[0.02] border border-white/5 hover:border-white/10 hover:bg-white/[0.04] transition-all duration-300"
+              whileHover={{ y: -5, transition: { duration: 0.2 } }}
+              className="group p-6 rounded-2xl bg-white/[0.02] border border-white/5 hover:border-helix-draft/30 hover:bg-white/[0.04] hover:shadow-xl hover:shadow-helix-draft/5 transition-all duration-300"
             >
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-helix-draft/20 to-helix-verify/20 flex items-center justify-center text-helix-draft mb-4 group-hover:scale-110 transition-transform">
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-helix-draft/20 to-helix-verify/20 flex items-center justify-center text-helix-draft mb-4 group-hover:scale-110 group-hover:rotate-3 transition-all duration-300">
                 {feature.icon}
               </div>
               <h3 className="text-lg font-semibold text-white mb-2">

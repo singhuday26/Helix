@@ -149,6 +149,12 @@ const ComparisonPage = () => {
 
         // Simulate acceptance/rejection
         const isAccepted = Math.random() < DRAFT_ACCEPTANCE_RATE;
+        const currentToken = draftBatch[verifyIndex];
+
+        if (!currentToken) {
+          clearInterval(verifyInterval);
+          return;
+        }
 
         if (isAccepted) {
           accepted++;
@@ -156,7 +162,7 @@ const ComparisonPage = () => {
           setSpecTokens((prev) => [
             ...prev,
             {
-              text: draftBatch[verifyIndex].text,
+              text: currentToken.text || "",
               status: "accepted",
               index: tokenIndex,
             },
@@ -169,7 +175,7 @@ const ComparisonPage = () => {
           setSpecTokens((prev) => [
             ...prev,
             {
-              text: draftBatch[verifyIndex].text,
+              text: currentToken.text || "",
               status: "corrected",
               index: tokenIndex,
             },
@@ -227,11 +233,14 @@ const ComparisonPage = () => {
     autoTime > 0 && specTime > 0 ? (autoTime / specTime).toFixed(2) : "—";
 
   return (
-    <div className="min-h-screen bg-void-950">
+    <div className="min-h-screen bg-void-950 relative overflow-hidden">
+      {/* Global DNA Helix Background Decoration */}
+      <div className="helix-bg-decoration" aria-hidden="true" />
+
       <Navbar />
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24 relative z-10">
         {/* Title Section */}
         <motion.div
           className="text-center mb-12"
@@ -377,7 +386,7 @@ const ComparisonPage = () => {
                     animate={{ opacity: 1, y: 0 }}
                     style={{ color: "#d1d5db" }}
                   >
-                    {token.text}
+                    {token?.text || ""}
                   </motion.span>
                 ))}
                 {isRunning && autoTokens.length < SAMPLE_TOKENS.length && (
@@ -517,7 +526,7 @@ const ComparisonPage = () => {
                           color: "#67e8f9",
                         }}
                       >
-                        {token.text}
+                        {token?.text || ""}
                         {verifyingIndex === i && (
                           <span className="ml-1 text-xs">🔍</span>
                         )}
@@ -538,10 +547,10 @@ const ComparisonPage = () => {
                     animate={{ opacity: 1, scale: 1 }}
                     style={{
                       color:
-                        token.status === "accepted" ? "#22c55e" : "#f59e0b",
+                        token?.status === "accepted" ? "#22c55e" : "#f59e0b",
                     }}
                   >
-                    {token.text}
+                    {token?.text || ""}
                   </motion.span>
                 ))}
                 {isRunning && specTokens.length < SAMPLE_TOKENS.length && (

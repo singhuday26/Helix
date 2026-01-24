@@ -1,5 +1,6 @@
 import React from "react";
 import { Link } from "react-router-dom";
+import { motion } from "framer-motion";
 
 const Footer = () => {
   const currentYear = new Date().getFullYear();
@@ -71,11 +72,11 @@ const Footer = () => {
                         href={link.href}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-sm text-gray-500 hover:text-white transition-colors flex items-center gap-1"
+                        className="text-sm text-gray-500 hover:text-helix-draft hover:translate-x-1 transition-all duration-200 flex items-center gap-1 group"
                       >
                         {link.name}
                         <svg
-                          className="w-3 h-3"
+                          className="w-3 h-3 group-hover:rotate-12 transition-transform"
                           fill="none"
                           viewBox="0 0 24 24"
                           stroke="currentColor"
@@ -91,7 +92,7 @@ const Footer = () => {
                     ) : (
                       <a
                         href={link.href}
-                        className="text-sm text-gray-500 hover:text-white transition-colors"
+                        className="text-sm text-gray-500 hover:text-helix-verify hover:translate-x-1 transition-all duration-200 inline-block"
                       >
                         {link.name}
                       </a>
