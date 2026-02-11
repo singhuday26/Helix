@@ -40,6 +40,9 @@ export default {
         mono: ["JetBrains Mono", "Fira Code", "monospace"],
         display: ["Space Grotesk", "Inter", "sans-serif"],
       },
+      gridTemplateColumns: {
+        16: "repeat(16, minmax(0, 1fr))",
+      },
       animation: {
         "helix-spin": "helixSpin 8s linear infinite",
         "draft-pulse": "draftPulse 2s ease-in-out infinite",

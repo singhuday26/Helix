@@ -18,6 +18,7 @@ const Navbar = () => {
   const navLinks = [
     { name: "Product", href: "/#features", external: false },
     { name: "Technology", href: "/technology", external: false },
+    { name: "PagedAttention", href: "/paged-attention", external: false },
     { name: "Playground", href: "/playground", external: false },
     {
       name: "Documentation",

@@ -14,6 +14,7 @@ import Footer from "./components/Footer";
 import ComparisonPage from "./pages/ComparisonPage";
 import TechnologyPage from "./pages/TechnologyPage";
 import PlaygroundPage from "./pages/PlaygroundPage";
+import PagedAttentionPage from "./pages/PagedAttentionPage";
 
 // Redirect component for external URLs - opens in new tab and navigates back
 const ExternalRedirect = ({ to }) => {
@@ -67,6 +68,7 @@ function App() {
           <Route path="/" element={<LandingPage />} />
           <Route path="/comparison" element={<ComparisonPage />} />
           <Route path="/technology" element={<TechnologyPage />} />
+          <Route path="/paged-attention" element={<PagedAttentionPage />} />
           <Route path="/playground" element={<PlaygroundPage />} />
           <Route
             path="/docs"
