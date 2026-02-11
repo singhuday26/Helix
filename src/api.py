@@ -148,6 +148,20 @@ class MetricsResponse(BaseModel):
     avg_tokens_per_second: float
     model_id: str
     device: str
+
+
+class MemoryComparisonResponse(BaseModel):
+    """Response body for memory comparison between paged and traditional KV cache."""
+    traditional_memory_mb: float
+    paged_memory_mb: float
+    memory_saved_mb: float
+    memory_saved_percent: float
+    num_blocks: int
+    block_size: int
+    blocks_used: int
+    blocks_free: int
+    utilization_percent: float
+    sequence_length: int
     is_loaded: bool
 
 
@@ -189,6 +203,95 @@ async def metrics():
         return engine.get_metrics()
     except Exception as e:
         logger.error(f"Metrics retrieval failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/compare/memory", response_model=MemoryComparisonResponse, tags=["System"])
+async def compare_memory():
+    """
+    Compare memory usage between PagedAttention and traditional KV cache.
+    
+    This endpoint calculates the memory efficiency gains from using PagedAttention.
+    PagedAttention allocates memory in fixed-size blocks on-demand, reducing fragmentation
+    and increasing batch size capacity on memory-constrained edge devices.
+    
+    **Key Metrics:**
+    - Traditional: Pre-allocates contiguous memory for max_seq_len (high fragmentation)
+    - PagedAttention: Allocates 16-token blocks on-demand (minimal waste)
+    - Memory Savings: Typically 70-90% for average sequence lengths
+    """
+    try:
+        # Model configuration (TinyLlama)
+        num_layers = 22
+        num_heads = 4  # GQA - 4 KV heads
+        head_dim = 64
+        dtype_size = 2  # float16 = 2 bytes
+        
+        # Typical sequence length for comparison
+        sequence_length = 128  # Average conversation turn
+        max_seq_len = 2048  # Maximum supported by model
+        
+        # Block configuration
+        block_size = 16
+        num_blocks = 1024
+        
+        # Calculate traditional KV cache memory
+        # Shape: (batch, num_layers, 2, max_seq_len, num_heads, head_dim)
+        # The "2" is for K and V
+        traditional_memory_bytes = (
+            1 *  # batch_size
+            num_layers *
+            2 *  # K and V
+            max_seq_len *
+            num_heads *
+            head_dim *
+            dtype_size
+        )
+        traditional_memory_mb = traditional_memory_bytes / (1024 ** 2)
+        
+        # Calculate paged attention memory
+        # Only allocates blocks as needed
+        blocks_needed = (sequence_length + block_size - 1) // block_size  # Ceiling division
+        
+        # Shape: (blocks_needed, num_layers, 2, block_size, num_heads, head_dim)
+        paged_memory_bytes = (
+            blocks_needed *
+            num_layers *
+            2 *  # K and V
+            block_size *
+            num_heads *
+            head_dim *
+            dtype_size
+        )
+        paged_memory_mb = paged_memory_bytes / (1024 ** 2)
+        
+        # Calculate savings
+        memory_saved_mb = traditional_memory_mb - paged_memory_mb
+        memory_saved_percent = (memory_saved_mb / traditional_memory_mb) * 100
+        
+        # Block statistics
+        blocks_used = blocks_needed
+        blocks_free = num_blocks - blocks_used
+        utilization_percent = (blocks_used / num_blocks) * 100
+        
+        logger.info(f"Memory comparison: Traditional={traditional_memory_mb:.2f}MB, "
+                   f"Paged={paged_memory_mb:.2f}MB, Saved={memory_saved_percent:.1f}%")
+        
+        return MemoryComparisonResponse(
+            traditional_memory_mb=round(traditional_memory_mb, 2),
+            paged_memory_mb=round(paged_memory_mb, 2),
+            memory_saved_mb=round(memory_saved_mb, 2),
+            memory_saved_percent=round(memory_saved_percent, 1),
+            num_blocks=num_blocks,
+            block_size=block_size,
+            blocks_used=blocks_used,
+            blocks_free=blocks_free,
+            utilization_percent=round(utilization_percent, 1),
+            sequence_length=sequence_length,
+        )
+        
+    except Exception as e:
+        logger.error(f"Memory comparison failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

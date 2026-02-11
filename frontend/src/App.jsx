@@ -10,10 +10,10 @@ import LoadingScreen from "./components/LoadingScreen";
 import Navbar from "./components/Navbar";
 import Hero from "./components/Hero";
 import Features from "./components/Features";
-import Technology from "./components/Technology";
-import Playground from "./components/Playground";
 import Footer from "./components/Footer";
 import ComparisonPage from "./pages/ComparisonPage";
+import TechnologyPage from "./pages/TechnologyPage";
+import PlaygroundPage from "./pages/PlaygroundPage";
 
 // Redirect component for external URLs - opens in new tab and navigates back
 const ExternalRedirect = ({ to }) => {
@@ -39,8 +39,6 @@ const LandingPage = () => (
     <Navbar />
     <Hero />
     <Features />
-    <Technology />
-    <Playground />
     <Footer />
   </div>
 );
@@ -68,6 +66,8 @@ function App() {
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/comparison" element={<ComparisonPage />} />
+          <Route path="/technology" element={<TechnologyPage />} />
+          <Route path="/playground" element={<PlaygroundPage />} />
           <Route
             path="/docs"
             element={<ExternalRedirect to="http://localhost:8000/docs" />}
